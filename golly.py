@@ -5,18 +5,19 @@ Conway's Game of life in Python
 """
 
 __author__ = "TFC343"
-__version__ = "1.0.0"
+__version__ = "1.2.0"
 
 import collections
 import copy
 import dataclasses
-import functools
+import os
 import sys
 import logging
 import time
 import tkinter
 import traceback
 from tkinter.filedialog import asksaveasfilename, askopenfile
+from tkinter.messagebox import showerror, askyesno
 
 import pygame
 from pygame.locals import (
@@ -27,7 +28,6 @@ from pygame.locals import (
     QUIT,
     K_ESCAPE,
     K_p,
-    USEREVENT,
     FULLSCREEN,
     KMOD_CTRL,
     K_c,
@@ -37,7 +37,6 @@ pygame.init()
 pygame.font.init()
 
 SCREEN_WIDTH, SCREEN_HEIGHT = 1600, 900
-# SCREEN_WIDTH, SCREEN_HEIGHT = pygame.display.Info().current_w, pygame.display.Info().current_h
 
 BLACK = pygame.color.Color((0, 0, 0))
 GREY0 = pygame.color.Color((20, 20, 20))
@@ -80,7 +79,7 @@ class TorusList(list):
         list.__setitem__(self, key, value)
 
 
-ListType = TorusList
+ListType = TorusList  # the type of list being used for the board
 
 
 class VoidEntity:
@@ -192,27 +191,27 @@ class Gol:
     def reset(self):
         self.board = ListType([ListType([0 for _ in range(self.board_height)]) for _ in range(self.board_width)])
 
-    def save(self):
-        print(asksaveasfilename())
-
 
 @dataclasses.dataclass
 class sGol:
+    """a holder class for all important information of the game"""
     board_width: int
     board_height: int
     board: ListType
 
     @staticmethod
     def convert(game_inst: Gol):
+        """convert the Gol instant into the holder type"""
         return sGol(game_inst.board_width, game_inst.board_height, game_inst.board)
 
 
 class Memory:
     def __init__(self):
-        self.past = collections.deque()
-        self.future = collections.deque()
+        self.past = collections.deque()  # all the past action the user makes
+        self.future = collections.deque()  # the the future action the user makes (when the user clicks back)
 
     def is_empty(self) -> tuple[bool, bool]:
+        """checks if past or future are empty"""
         return not bool(len(self.past)), not bool(len(self.future))
 
     def store(self, game_inst):
@@ -221,12 +220,14 @@ class Memory:
         self.past.append(copy.deepcopy(g))
 
     def get_past(self, game_inst):
+        """called when user pressed back"""
         g = sGol.convert(game_inst)
         self.future.append(copy.deepcopy(g))
         j: sGol = self.past.pop()
         return Gol(j.board_width, j.board_height, j.board)
 
     def get_forward(self, game_inst):
+        """called when user clicks forward"""
         g = sGol.convert(game_inst)
         self.past.append(copy.deepcopy(g))
         j: sGol = self.future.pop()
@@ -234,9 +235,49 @@ class Memory:
 
 
 def pos_in_rectangle(pos: tuple[int, int], rect: pygame.Rect):
+    """checks if input is in the rectangle"""
     if rect.left < pos[0] < rect.right and rect.top < pos[1] < rect.bottom:
         return True
     return False
+
+
+def load(game_inst, file_name):
+    old_game = copy.copy(game_inst)
+    if file_name.split(".")[-1] == 'brd':
+        try:
+            with open(str(file_name), 'r') as file:
+                str_ = file.read()
+                str_ = str_.split(' ')
+                print(int(str_[0]) * int(str_[1]), len(str_[2]))
+                if not(int(str_[0]) * int(str_[1]) == len(str_[2])):
+                    raise DimensionError("dimensions do not fit data")
+                new_board = ListType(
+                    [ListType([0 for _ in range(int(str_[1]))]) for _ in range(int(str_[0]))])
+                new_game = Gol(int(str_[0]), int(str_[1]))
+                for x, rows in enumerate(new_board):
+                    for y, dat in enumerate(rows):
+                        new_game.board[x][y] = int(str_[2][x*len(rows) + y])
+                return new_game
+        except FileNotFoundError:
+            logging.warning("file not found")
+            return old_game
+        except DimensionError:
+            logging.warning("the dimensions provided do not fit the data")
+            return old_game
+    else:
+        logging.warning("wrong file type")
+        return old_game    
+
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 
 def main():
@@ -250,7 +291,7 @@ def main():
     # creating window icon
     icon = pygame.Surface((32, 32))
     icon.fill(BLACK)
-    img = pygame.transform.scale(pygame.image.load("icon.png"), (30, 30))
+    img = pygame.transform.scale(pygame.image.load(resource_path('icon.png')), (30, 30))
     icon.blit(img, (1, 1))
     pygame.display.set_icon(icon)
 
@@ -262,6 +303,12 @@ def main():
     frame_time = 1/15  # how long between each gen. at a minimum
     memory = Memory()  # where the back and forward button data is stored
     memory.store(game)  # adding original state to memory
+
+    try:
+        if sys.argv[1][-4:] == '.brd':
+            game = load(game, sys.argv[1])
+    except IndexError:
+        pass
 
     running = True
     while running:
@@ -289,9 +336,13 @@ def main():
                     playing = not playing
                     logging.info("playing/paused")
                 if event.key == K_c:
-                    print(pressed_mods)
                     if pressed_mods & KMOD_CTRL:
-                        raise KeyboardInterrupt
+                        top = tkinter.Tk()
+                        top.withdraw()
+                        user = askyesno("do you want to quit?", message="are you sure you want to quit?")
+                        top.destroy()
+                        if user:
+                            raise KeyboardInterrupt
             if event.type == MOUSEBUTTONDOWN:
                 if pos_in_rectangle(pos, game_rect):
                     x, y = pos
@@ -322,7 +373,12 @@ def main():
                     game.reset()
                     playing = False
                 elif pos_in_rectangle(pos, quit_rect):
-                    running = False
+                    top = tkinter.Tk()
+                    top.withdraw()
+                    user = askyesno("do you want to quit?", message="are you sure you want to quit?")
+                    top.destroy()
+                    if user:
+                        running = False
                 elif pos_in_rectangle(pos, save_as_rect):
                     top = tkinter.Tk()
                     top.withdraw()
@@ -348,32 +404,9 @@ def main():
                     if file_name is None:
                         file_name = VoidEntity()
                     top.destroy()
-                    old_board = copy.deepcopy(game.board)
-                    game.reset()
-                    if file_name.name.split(".")[-1] == 'brd':
-                        try:
-                            with open(str(file_name.name), 'r') as file:
-                                str_ = file.read()
-                                str_ = str_.split(' ')
-                                print(int(str_[0]) * int(str_[1]), len(str_[2]))
-                                if not(int(str_[0]) * int(str_[1]) == len(str_[2])):
-                                    raise DimensionError("dimensions do not fit data")
-                                new_board = ListType(
-                                    [ListType([0 for _ in range(int(str_[1]))]) for _ in range(int(str_[0]))])
-                                for x, rows in enumerate(new_board):
-                                    for y, dat in enumerate(rows):
-                                        new_board[x][y] = int(str_[2][x*len(rows) + y])
-                                memory.store(game)
-                                game = Gol(int(str_[0]), int(str_[1]), new_board)
-                        except FileNotFoundError:
-                            logging.warning("file not found")
-                            game.board = old_board
-                        except DimensionError:
-                            logging.warning("the dimensions provided do not fit the data")
-                            game.board = old_board
-                    else:
-                        logging.warning("wrong file type")
-                        game.board = old_board
+
+                    memory.store(game)
+                    game = load(game, file_name.name)
 
                 elif pos_in_rectangle(pos, back_rect):
                     playing = False
@@ -462,6 +495,8 @@ def main():
         r.center = (450, 65)
         surf.blit(text, r)
 
+        pygame.draw.line(surf, GREY1, (528, 0), (528, SCREEN_HEIGHT*0.148))
+
         # save_rect = pygame.Rect((1200, 20, 100, 50))
         # pygame.draw.rect(surf, GREY0, save_rect, 5)
         # pygame.draw.rect(surf, GREY2, save_rect)
@@ -506,7 +541,15 @@ if __name__ == '__main__':
         main()
     except Exception:
         logging.info("an error has occurred")
-        logging.info(traceback.format_exc())
+        tb = traceback.format_exc()
+        logging.info(tb)
+        top = tkinter.Tk()
+        top.withdraw()
+        showerror("Error", f"an error has occurred\ncrash report sent to {os.getcwd()}")
+        top.destroy()
+        with open('crash report.txt', 'w') as file:
+            file.write("an error has occurred\nplease send the contents of this file to https://github.com/TFC-343/GameOfLife/issues\n\n")
+            file.write(tb)
     except KeyboardInterrupt:
         logging.info("closing from user interrupt")
     else:
