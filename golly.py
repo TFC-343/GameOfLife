@@ -5,7 +5,7 @@ Conway's Game of life in Python
 """
 
 __author__ = "TFC343"
-__version__ = "1.3.0"
+__version__ = "1.4.1"
 
 import collections
 import copy
@@ -186,8 +186,6 @@ class Gol:
         # draw
         self.draw()
 
-        # pygame.display.update()
-
     def reset(self):
         self.board = ListType([ListType([0 for _ in range(self.board_height)]) for _ in range(self.board_width)])
 
@@ -232,13 +230,6 @@ class Memory:
         self.past.append(copy.deepcopy(g))
         j: sGol = self.future.pop()
         return Gol(j.board_width, j.board_height, j.board)
-
-
-def pos_in_rectangle(pos: tuple[int, int], rect: pygame.Rect):
-    """checks if input is in the rectangle"""
-    if rect.left < pos[0] < rect.right and rect.top < pos[1] < rect.bottom:
-        return True
-    return False
 
 
 def load(game_inst, file_name):
@@ -295,12 +286,15 @@ def main():
     icon.blit(img, (1, 1))
     pygame.display.set_icon(icon)
 
-    game_rect, step_rect, play_rect, clear_rect, quit_rect, save_as_rect, load_rect, back_rect, for_rect = [VoidEntity()]*9  # init for some vars to avoid errors
+    game_rect, step_rect, play_rect, clear_rect, quit_rect, save_as_rect, load_rect, back_rect, for_rect, slow_rect, speed_rect =\
+        [VoidEntity()]*11  # init for some vars to avoid errors
     playing = False  # if the program is currently running
     playing_ = False  # if the game should be playing but can't bc the user is drawing
     drawing = 0  # {0: not drawing, 1: adding, 2: removing}
     timer = time.perf_counter()  # timing when an generation should happen
-    frame_time = 1/15  # how long between each gen. at a minimum
+    frame_times = [1/2, 1/5, 1/15, 1/25, 1/50]
+    frame_index = 2
+    frame_time = frame_times[frame_index]  # how long between each gen. at a minimum
     memory = Memory()  # where the back and forward button data is stored
     memory.store(game)  # adding original state to memory
 
@@ -344,7 +338,7 @@ def main():
                         if user:
                             raise KeyboardInterrupt
             if event.type == MOUSEBUTTONDOWN:
-                if pos_in_rectangle(pos, game_rect):
+                if game_rect.collidepoint(pos):
                     x, y = pos
                     x, y = x - game_rect.left, y - game_rect.top
                     x, y = int(game.board_width * x / game_rect.width), int(game.board_height * y / game_rect.height)
@@ -358,28 +352,28 @@ def main():
                         playing = False
                         drawing = 1
                         memory.store(game)
-                elif pos_in_rectangle(pos, step_rect):
+                elif step_rect.collidepoint(pos):
                     memory.store(game)
                     playing = False
                     game.play_step()
-                elif pos_in_rectangle(pos, play_rect):
+                elif play_rect.collidepoint(pos):
                     if not playing:
                         memory.store(game)
                         playing_ = True
                     playing = not playing
                     logging.info("playing/paused")
-                elif pos_in_rectangle(pos, clear_rect):
+                elif clear_rect.collidepoint(pos):
                     memory.store(game)
                     game.reset()
                     playing = False
-                elif pos_in_rectangle(pos, quit_rect):
+                elif quit_rect.collidepoint(pos):
                     top = tkinter.Tk()
                     top.withdraw()
                     user = askyesno("do you want to quit?", message="are you sure you want to quit?")
                     top.destroy()
                     if user:
                         running = False
-                elif pos_in_rectangle(pos, save_as_rect):
+                elif save_as_rect.collidepoint(pos):
                     top = tkinter.Tk()
                     top.withdraw()
                     file_name = asksaveasfilename(parent=top)
@@ -396,7 +390,7 @@ def main():
                     with open(file_name+'.brd', 'w') as file:
                         file.write(str_)
 
-                elif pos_in_rectangle(pos, load_rect):
+                elif load_rect.collidepoint(pos):
                     playing = False
                     top = tkinter.Tk()
                     top.withdraw()
@@ -408,25 +402,36 @@ def main():
                     memory.store(game)
                     game = load(game, file_name.name)
 
-                elif pos_in_rectangle(pos, back_rect):
+                elif back_rect.collidepoint(pos):
                     playing = False
                     if memory.is_empty()[0]:
                         logging.info("no more on stack")
                     else:
                         game = memory.get_past(game)
 
-                elif pos_in_rectangle(pos, for_rect):
+                elif for_rect.collidepoint(pos):
                     playing = False
                     if memory.is_empty()[1]:
                         logging.info("no more on stack")
                     else:
                         game = memory.get_forward(game)
 
+                elif slow_rect.collidepoint(pos):
+                    if frame_index > 0:
+                        frame_index -= 1
+                        frame_time = frame_times[frame_index]
+
+                elif speed_rect.collidepoint(pos):
+                    if frame_index < len(frame_times) - 1:
+                        frame_index += 1
+                        frame_time = frame_times[frame_index]
+
             if event.type == MOUSEBUTTONUP:
                 if drawing != 0:
                     drawing = 0
-                playing = playing_
-                playing_ = False
+                if game_rect.collidepoint(pos):
+                    playing = playing_
+                    playing_ = False
 
         if pygame.mouse.get_pressed(3)[0]:
             x, y = pygame.mouse.get_pos()
@@ -453,7 +458,7 @@ def main():
 
         play_rect = pygame.Rect((40, 20, 100, 50))
         pygame.draw.rect(surf, GREY0, play_rect, 5)
-        pygame.draw.rect(surf, GREY2_5 if play_rect.collidepoint(*pos) else GREY2, play_rect)
+        pygame.draw.rect(surf, GREY2_5 if play_rect.collidepoint(pos) else GREY2, play_rect)
         text = SETTINGS_FONT.render("pause" if playing else "play", False, BLACK)
         r = text.get_rect()
         r.center = (0, 45)
@@ -462,7 +467,7 @@ def main():
 
         step_rect = pygame.Rect((40, 80, 100, 30))
         pygame.draw.rect(surf, GREY0, step_rect, 5)
-        pygame.draw.rect(surf, GREY2_5 if step_rect.collidepoint(*pos) else GREY2, step_rect)
+        pygame.draw.rect(surf, GREY2_5 if step_rect.collidepoint(pos) else GREY2, step_rect)
         text = SETTINGS_FONT.render("play step", False, BLACK)
         r = text.get_rect()
         r.center = (0, 95)
@@ -471,7 +476,7 @@ def main():
 
         clear_rect = pygame.Rect((165, 20, 75, 90))
         pygame.draw.rect(surf, GREY0, clear_rect, 5)
-        pygame.draw.rect(surf, GREY2_5 if clear_rect.collidepoint(*pos) else GREY2, clear_rect)
+        pygame.draw.rect(surf, GREY2_5 if clear_rect.collidepoint(pos) else GREY2, clear_rect)
         text = SETTINGS_FONT.render("clear", False, BLACK)
         r = text.get_rect()
         r.center = (200, 65)
@@ -481,7 +486,7 @@ def main():
 
         back_rect = pygame.Rect((315, 20, 75, 90))
         pygame.draw.rect(surf, GREY0, back_rect, 5)
-        pygame.draw.rect(surf, GREY2_5 if back_rect.collidepoint(*pos) else GREY2, back_rect)
+        pygame.draw.rect(surf, GREY2_5 if back_rect.collidepoint(pos) else GREY2, back_rect)
         text = SETTINGS_FONT.render("back", False, BLACK)
         r = text.get_rect()
         r.center = (350, 65)
@@ -496,6 +501,26 @@ def main():
         surf.blit(text, r)
 
         pygame.draw.line(surf, GREY1, (528, 0), (528, SCREEN_HEIGHT*0.148))
+
+        slow_rect = pygame.Rect((528+38, 20, 75, 90))
+        pygame.draw.rect(surf, GREY0, slow_rect, 5)
+        pygame.draw.rect(surf, GREY2_5 if slow_rect.collidepoint(pos) else GREY2, slow_rect)
+        text = SETTINGS_FONT.render("- speed", False, BLACK)
+        r = text.get_rect()
+        r.center = (603, 65)
+        surf.blit(text, r)
+
+        speed_rect = pygame.Rect((528+38+100, 20, 75, 90))
+        pygame.draw.rect(surf, GREY0, speed_rect, 5)
+        pygame.draw.rect(surf, GREY2_5 if speed_rect.collidepoint(pos) else GREY2, speed_rect)
+        text = SETTINGS_FONT.render("+ speed", False, BLACK)
+        r = text.get_rect()
+        r.center = (703, 65)
+        surf.blit(text, r)
+
+        pygame.draw.line(surf, GREY1, (779, 0), (779, SCREEN_HEIGHT*0.148))
+
+        pygame.draw.line(surf, GREY1, (1225-38, 0), (1225-38, SCREEN_HEIGHT*0.148))
 
         # save_rect = pygame.Rect((1200, 20, 100, 50))
         # pygame.draw.rect(surf, GREY0, save_rect, 5)
@@ -537,19 +562,20 @@ def main():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.NOTSET, format="[%(levelname)s] -> %(message)s")
+    logging.info("running version " + __version__)
     try:
         main()
     except Exception:
         logging.info("an error has occurred")
-        tb = traceback.format_exc()
-        logging.info(tb)
+        __tb = traceback.format_exc()
+        logging.info(__tb)
         top = tkinter.Tk()
         top.withdraw()
         showerror("Error", f"an error has occurred\ncrash report sent to {os.getcwd()}")
         top.destroy()
-        with open('crash report.txt', 'w') as file:
-            file.write("an error has occurred\nplease send the contents of this file to https://github.com/TFC-343/GameOfLife/issues\n\n")
-            file.write(tb)
+        with open('crash report.txt', 'w') as __file:
+            __file.write("an error has occurred\nplease send the contents of this file to https://github.com/TFC-343/GameOfLife/issues\n\n")
+            __file.write(__tb)
     except KeyboardInterrupt:
         logging.info("closing from user interrupt")
     else:
