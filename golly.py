@@ -5,7 +5,7 @@ Conway's Game of life in Python
 """
 
 __author__ = "TFC343"
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 import collections
 import copy
