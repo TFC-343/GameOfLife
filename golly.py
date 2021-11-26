@@ -5,7 +5,7 @@ Conway's Game of life in Python
 """
 
 __author__ = "TFC343"
-__version__ = "1.4.1"
+__version__ = "1.5.0"
 
 import collections
 import copy
@@ -31,6 +31,7 @@ from pygame.locals import (
     FULLSCREEN,
     KMOD_CTRL,
     K_c,
+    K_F11,
 )
 
 pygame.init()
@@ -142,11 +143,11 @@ class Gol:
                 if point == 1:
                     pygame.draw.rect(self.surf, WHITE, (x * self.pixel_width, y * self.pixel_height, self.pixel_width, self.pixel_height))
 
-        for column in range(1, self.board_width):
-            pygame.draw.line(self.surf, GREY2, (column * self.pixel_width, 0), (column * self.pixel_width, self.screen_height), 1)
-
-        for row in range(1, self.board_height):
-            pygame.draw.line(self.surf, GREY2, (0, row * self.pixel_height), (self.screen_width, row * self.pixel_height), 1)
+        # for column in range(1, self.board_width):
+        #     pygame.draw.line(self.surf, GREY2, (column * self.pixel_width, 0), (column * self.pixel_width, self.screen_height), 1)
+#
+        # for row in range(1, self.board_height):
+        #     pygame.draw.line(self.surf, GREY2, (0, row * self.pixel_height), (self.screen_width, row * self.pixel_height), 1)
 
     def draw_data(self):
         for x, row in enumerate(self.board):
@@ -239,7 +240,6 @@ def load(game_inst, file_name):
             with open(str(file_name), 'r') as file:
                 str_ = file.read()
                 str_ = str_.split(' ')
-                print(int(str_[0]) * int(str_[1]), len(str_[2]))
                 if not(int(str_[0]) * int(str_[1]) == len(str_[2])):
                     raise DimensionError("dimensions do not fit data")
                 new_board = ListType(
@@ -272,13 +272,13 @@ def resource_path(relative_path):
 
 
 def main():
+    global SCREEN_WIDTH, SCREEN_HEIGHT
     game = Gol()
     if 'fullscreen' in sys.argv:
         surf = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), FULLSCREEN)
     else:
         surf = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("game of life in python")
-
     # creating window icon
     icon = pygame.Surface((32, 32))
     icon.fill(BLACK)
@@ -292,7 +292,7 @@ def main():
     playing_ = False  # if the game should be playing but can't bc the user is drawing
     drawing = 0  # {0: not drawing, 1: adding, 2: removing}
     timer = time.perf_counter()  # timing when an generation should happen
-    frame_times = [1/2, 1/5, 1/15, 1/25, 1/50]
+    frame_times = [1/2, 1/5, 1/15, 1/25, 1/50, 1/100]
     frame_index = 2
     frame_time = frame_times[frame_index]  # how long between each gen. at a minimum
     memory = Memory()  # where the back and forward button data is stored
@@ -336,7 +336,9 @@ def main():
                         user = askyesno("do you want to quit?", message="are you sure you want to quit?")
                         top.destroy()
                         if user:
-                            raise KeyboardInterrupt
+                            running = False
+                if event.key == K_F11:
+                    pygame.display.toggle_fullscreen()
             if event.type == MOUSEBUTTONDOWN:
                 if game_rect.collidepoint(pos):
                     x, y = pos
@@ -392,6 +394,7 @@ def main():
 
                 elif load_rect.collidepoint(pos):
                     playing = False
+                    playing_ = False
                     top = tkinter.Tk()
                     top.withdraw()
                     file_name = askopenfile(parent=top)
@@ -426,12 +429,50 @@ def main():
                         frame_index += 1
                         frame_time = frame_times[frame_index]
 
+                elif size_rect.collidepoint(pos):
+                    new_size = [game.board_width, game.board_height]
+                    def pressed(*_):
+                        new_size[0], new_size[1] = ent1.get(), ent2.get()
+                        top.destroy()
+                    top = tkinter.Tk()
+                    top.resizable(False, False)
+                    top.geometry("300x240")
+                    top.title("enter dimesions")
+                    tkinter.Label(top, text="enter dimensions\n(this will clear the board)\n\n warning: entering too large number will cause a crash\nstick to 2 digit numbers to be safe").place(relx=0.5, rely=0.2, anchor='center')
+                    tkinter.Label(top, text="width").place(relx=0.40, rely=0.45, anchor='center')
+                    tkinter.Label(top, text="height").place(relx=0.60, rely=0.45, anchor='center')
+                    ent1 = tkinter.Entry(top, width=3, justify='center')
+                    ent1.place(relx=0.4, rely=0.6, anchor='center')
+                    ent1.focus_set()
+                    ent2 = tkinter.Entry(top, width=3, justify='center')
+                    ent2.place(relx=0.6, rely=0.6, anchor='center')
+                    btn = tkinter.Button(top, text="submit", command=pressed)
+                    btn.place(relx=0.5, rely=0.82, anchor='center')
+                    top.bind("<Return>", pressed)
+                    tkinter.mainloop()
+                    del ent1, ent2, top
+                    if len(new_size) == 2:
+                        try:
+                            new_size = int(new_size[0]), int(new_size[1])
+                        except ValueError:
+                            logging.error("numbers not entered")
+                        else:
+                            memory.store(game)
+                            game = Gol(*new_size)
+
             if event.type == MOUSEBUTTONUP:
                 if drawing != 0:
                     drawing = 0
-                if game_rect.collidepoint(pos):
+                if playing_:
                     playing = playing_
                     playing_ = False
+
+            # if event.type == WINDOWSIZECHANGED:
+            #     if WINDOWMAXIMIZED in map(lambda z: z.type, x):
+            #         print("big")
+            #     else:
+            #         surf = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), RESIZABLE)
+            # TODO add window resizing
 
         if pygame.mouse.get_pressed(3)[0]:
             x, y = pygame.mouse.get_pos()
@@ -449,10 +490,21 @@ def main():
         surf.fill(GREY3)
 
         game.draw()
-        img = pygame.transform.scale(game.surf, (SCREEN_WIDTH*Multiplier(0.95), SCREEN_HEIGHT*Multiplier(0.8)))
+        if SCREEN_HEIGHT*Multiplier(0.8*game.board_width/game.board_height) < SCREEN_WIDTH:
+            img = pygame.transform.scale(game.surf, (SCREEN_HEIGHT*Multiplier(0.8*game.board_width/game.board_height), SCREEN_HEIGHT*Multiplier(0.8)))
+        else:
+            img = pygame.transform.scale(game.surf, (SCREEN_WIDTH*Multiplier(0.95), SCREEN_WIDTH*Multiplier(0.95*game.board_height/game.board_width)))
         game_rect = img.get_rect()
         game_rect.center = (SCREEN_WIDTH//2, SCREEN_HEIGHT*Multiplier(0.57))
         surf.blit(img, game_rect)
+
+        for i in range(1, game.board_width):
+            pygame.draw.line(surf, GREY2, (game_rect.left + i * game_rect.width/game.board_width, game_rect.top),
+                             (game_rect.x + i * game_rect.width/game.board_width, game_rect.bottom))
+
+        for i in range(1, game.board_height):
+            pygame.draw.line(surf, GREY2, (game_rect.left, game_rect.top + i * game_rect.height/game.board_height),
+                             (game_rect.right, game_rect.top + i * game_rect.height/game.board_height))
 
         pygame.draw.line(surf, GREY1, (0, SCREEN_HEIGHT*0.148), (SCREEN_WIDTH, SCREEN_HEIGHT*0.148))
 
@@ -484,52 +536,59 @@ def main():
 
         pygame.draw.line(surf, GREY1, (278, 0), (278, SCREEN_HEIGHT*0.148))
 
-        back_rect = pygame.Rect((315, 20, 75, 90))
+        back_rect = pygame.Rect((315, 20, 100, 40))
         pygame.draw.rect(surf, GREY0, back_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if back_rect.collidepoint(pos) else GREY2, back_rect)
         text = SETTINGS_FONT.render("back", False, BLACK)
         r = text.get_rect()
-        r.center = (350, 65)
+        r.center = back_rect.center
+        r.left = 325
         surf.blit(text, r)
 
-        for_rect = pygame.Rect((415, 20, 75, 90))
+        for_rect = pygame.Rect((315, 70, 100, 40))
         pygame.draw.rect(surf, GREY0, for_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if for_rect.collidepoint(*pos) else GREY2, for_rect)
         text = SETTINGS_FONT.render("forward", False, BLACK)
         r = text.get_rect()
-        r.center = (450, 65)
+        r.center = for_rect.center
+        r.left = 325
         surf.blit(text, r)
 
-        pygame.draw.line(surf, GREY1, (528, 0), (528, SCREEN_HEIGHT*0.148))
+        pygame.draw.line(surf, GREY1, (453, 0), (453, SCREEN_HEIGHT*0.148))
 
-        slow_rect = pygame.Rect((528+38, 20, 75, 90))
+        slow_rect = pygame.Rect((491, 20, 100, 40))
         pygame.draw.rect(surf, GREY0, slow_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if slow_rect.collidepoint(pos) else GREY2, slow_rect)
         text = SETTINGS_FONT.render("- speed", False, BLACK)
         r = text.get_rect()
-        r.center = (603, 65)
+        r.center = slow_rect.center
         surf.blit(text, r)
 
-        speed_rect = pygame.Rect((528+38+100, 20, 75, 90))
+        speed_rect = pygame.Rect((491, 70, 100, 40))
         pygame.draw.rect(surf, GREY0, speed_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if speed_rect.collidepoint(pos) else GREY2, speed_rect)
         text = SETTINGS_FONT.render("+ speed", False, BLACK)
         r = text.get_rect()
-        r.center = (703, 65)
+        r.center = speed_rect.center
         surf.blit(text, r)
 
-        pygame.draw.line(surf, GREY1, (779, 0), (779, SCREEN_HEIGHT*0.148))
+        pygame.draw.line(surf, GREY1, (629, 0), (629, SCREEN_HEIGHT*0.148))
 
-        pygame.draw.line(surf, GREY1, (1225-38, 0), (1225-38, SCREEN_HEIGHT*0.148))
+        size_rect = pygame.Rect((667, 20, 100, 90))
+        pygame.draw.rect(surf, GREY0, size_rect, 5)
+        pygame.draw.rect(surf, GREY2_5 if size_rect.collidepoint(pos) else GREY2, size_rect)
+        text = SETTINGS_FONT.render("change", False, BLACK)
+        r = text.get_rect()
+        r.center = (717, 55)
+        surf.blit(text, r)
+        text = SETTINGS_FONT.render("board size", False, BLACK)
+        r = text.get_rect()
+        r.center = (717, 75)
+        surf.blit(text, r)
 
-        # save_rect = pygame.Rect((1200, 20, 100, 50))
-        # pygame.draw.rect(surf, GREY0, save_rect, 5)
-        # pygame.draw.rect(surf, GREY2, save_rect)
-        # text = SETTINGS_FONT.render("save", False, BLACK)
-        # r = text.get_rect()
-        # r.center = (0, 45)
-        # r.left = 48+1160
-        # surf.blit(text, r)
+        pygame.draw.line(surf, GREY1, (805, 0), (805, SCREEN_HEIGHT*0.148))
+
+        pygame.draw.line(surf, GREY1, (1187, 0), (1225-38, SCREEN_HEIGHT*0.148))
 
         save_as_rect = pygame.Rect((1225, 20, 75, 90))
         pygame.draw.rect(surf, GREY0, save_as_rect, 5)
@@ -569,10 +628,10 @@ if __name__ == '__main__':
         logging.info("an error has occurred")
         __tb = traceback.format_exc()
         logging.info(__tb)
-        top = tkinter.Tk()
-        top.withdraw()
+        __top = tkinter.Tk()
+        __top.withdraw()
         showerror("Error", f"an error has occurred\ncrash report sent to {os.getcwd()}")
-        top.destroy()
+        __top.destroy()
         with open('crash report.txt', 'w') as __file:
             __file.write("an error has occurred\nplease send the contents of this file to https://github.com/TFC-343/GameOfLife/issues\n\n")
             __file.write(__tb)
