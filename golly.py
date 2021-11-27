@@ -5,7 +5,7 @@ Conway's Game of life in Python
 """
 
 __author__ = "TFC343"
-__version__ = "1.5.0"
+__version__ = "1.5.2"
 
 import collections
 import copy
@@ -458,6 +458,7 @@ def main():
                             logging.error("numbers not entered")
                         else:
                             memory.store(game)
+                            playing, playing_ = False, False
                             game = Gol(*new_size)
 
             if event.type == MOUSEBUTTONUP:
