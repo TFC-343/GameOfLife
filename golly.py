@@ -5,7 +5,7 @@ Conway's Game of life in Python
 """
 
 __author__ = "TFC343"
-__version__ = "1.5.2"
+__version__ = "1.6.0"
 
 import collections
 import copy
@@ -32,12 +32,18 @@ from pygame.locals import (
     KMOD_CTRL,
     K_c,
     K_F11,
+    RESIZABLE,
+    VIDEORESIZE,
+    WINDOWMAXIMIZED,
 )
 
 pygame.init()
 pygame.font.init()
 
-SCREEN_WIDTH, SCREEN_HEIGHT = 1600, 900
+print(pygame.display.Info())
+SCREEN_WIDTH = int(pygame.display.Info().current_w*0.85)
+SCREEN_HEIGHT = int(SCREEN_WIDTH * (900/1600))
+# SCREEN_WIDTH, SCREEN_HEIGHT = 1600, 900
 
 BLACK = pygame.color.Color((0, 0, 0))
 GREY0 = pygame.color.Color((20, 20, 20))
@@ -47,9 +53,6 @@ GREY2_5 = pygame.color.Color((125, 125, 125))
 GREY3 = pygame.color.Color((150, 150, 150))
 WHITE = pygame.color.Color((255, 255, 255))
 BLUE = pygame.color.Color((0, 0, 255))
-
-FONT = pygame.font.SysFont('arial', 30)
-SETTINGS_FONT = pygame.font.SysFont('arial', 24)
 
 
 class DimensionError(Exception):
@@ -123,6 +126,11 @@ class Multiplier:
         return round(self.factor * other)
 
 
+RATIO = Multiplier(SCREEN_WIDTH / 1600)
+FONT = pygame.font.SysFont('arial', 30*RATIO)
+SETTINGS_FONT = pygame.font.SysFont('arial', 24*RATIO)
+
+
 class Gol:
     def __init__(self, x=80, y=40, board=None):
         self.screen_width, self.screen_height = 1600, 900
@@ -145,9 +153,9 @@ class Gol:
 
         # for column in range(1, self.board_width):
         #     pygame.draw.line(self.surf, GREY2, (column * self.pixel_width, 0), (column * self.pixel_width, self.screen_height), 1)
-#
-        # for row in range(1, self.board_height):
-        #     pygame.draw.line(self.surf, GREY2, (0, row * self.pixel_height), (self.screen_width, row * self.pixel_height), 1)
+    #
+    # for row in range(1, self.board_height):
+    #     pygame.draw.line(self.surf, GREY2, (0, row * self.pixel_height), (self.screen_width, row * self.pixel_height), 1)
 
     def draw_data(self):
         for x, row in enumerate(self.board):
@@ -272,12 +280,12 @@ def resource_path(relative_path):
 
 
 def main():
-    global SCREEN_WIDTH, SCREEN_HEIGHT
+    global SCREEN_WIDTH, SCREEN_HEIGHT, RATIO, FONT, SETTINGS_FONT
     game = Gol()
     if 'fullscreen' in sys.argv:
         surf = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), FULLSCREEN)
     else:
-        surf = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        surf = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), RESIZABLE)
     pygame.display.set_caption("game of life in python")
     # creating window icon
     icon = pygame.Surface((32, 32))
@@ -286,8 +294,8 @@ def main():
     icon.blit(img, (1, 1))
     pygame.display.set_icon(icon)
 
-    game_rect, step_rect, play_rect, clear_rect, quit_rect, save_as_rect, load_rect, back_rect, for_rect, slow_rect, speed_rect =\
-        [VoidEntity()]*11  # init for some vars to avoid errors
+    game_rect, step_rect, play_rect, clear_rect, quit_rect, save_as_rect, load_rect, back_rect, for_rect, slow_rect, speed_rect, size_rect =\
+        [VoidEntity()]*12  # init for some vars to avoid errors
     playing = False  # if the program is currently running
     playing_ = False  # if the game should be playing but can't bc the user is drawing
     drawing = 0  # {0: not drawing, 1: adding, 2: removing}
@@ -309,12 +317,11 @@ def main():
         pos = pygame.mouse.get_pos()
         # get event
         x = pygame.event.get()
-        pressed_keys = pygame.key.get_pressed()
         pressed_mods = pygame.key.get_mods()
         for event in x:
             if event.type == QUIT:
                 running = False
-            if event.type == KEYDOWN:
+            elif event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
                     memory.store(game)
                     playing = False
@@ -339,7 +346,7 @@ def main():
                             running = False
                 if event.key == K_F11:
                     pygame.display.toggle_fullscreen()
-            if event.type == MOUSEBUTTONDOWN:
+            elif event.type == MOUSEBUTTONDOWN:
                 if game_rect.collidepoint(pos):
                     x, y = pos
                     x, y = x - game_rect.left, y - game_rect.top
@@ -431,13 +438,14 @@ def main():
 
                 elif size_rect.collidepoint(pos):
                     new_size = [game.board_width, game.board_height]
+
                     def pressed(*_):
                         new_size[0], new_size[1] = ent1.get(), ent2.get()
                         top.destroy()
                     top = tkinter.Tk()
                     top.resizable(False, False)
                     top.geometry("300x240")
-                    top.title("enter dimesions")
+                    top.title("enter dimensions")
                     tkinter.Label(top, text="enter dimensions\n(this will clear the board)\n\n warning: entering too large number will cause a crash\nstick to 2 digit numbers to be safe").place(relx=0.5, rely=0.2, anchor='center')
                     tkinter.Label(top, text="width").place(relx=0.40, rely=0.45, anchor='center')
                     tkinter.Label(top, text="height").place(relx=0.60, rely=0.45, anchor='center')
@@ -461,19 +469,31 @@ def main():
                             playing, playing_ = False, False
                             game = Gol(*new_size)
 
-            if event.type == MOUSEBUTTONUP:
+            elif event.type == MOUSEBUTTONUP:
                 if drawing != 0:
                     drawing = 0
                 if playing_:
                     playing = playing_
                     playing_ = False
 
-            # if event.type == WINDOWSIZECHANGED:
-            #     if WINDOWMAXIMIZED in map(lambda z: z.type, x):
-            #         print("big")
-            #     else:
-            #         surf = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), RESIZABLE)
-            # TODO add window resizing
+            elif event.type == VIDEORESIZE:
+                logging.info("window size change")
+                new_display_info = pygame.display.Info()
+                SCREEN_WIDTH = new_display_info.current_w
+                SCREEN_HEIGHT = int(new_display_info.current_w * (900/1600))
+                pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), RESIZABLE)
+                RATIO = Multiplier(SCREEN_WIDTH / 1600)
+                FONT = pygame.font.SysFont('arial', 30*RATIO)
+                SETTINGS_FONT = pygame.font.SysFont('arial', 24*RATIO)
+
+            elif event.type == WINDOWMAXIMIZED:
+                new_display_info = pygame.display.Info()
+                SCREEN_HEIGHT = new_display_info.current_h
+                SCREEN_WIDTH = int(new_display_info.current_h * (1600/900))
+                pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), RESIZABLE)
+                RATIO = Multiplier(SCREEN_WIDTH / 1600)
+                FONT = pygame.font.SysFont('arial', 30*RATIO)
+                SETTINGS_FONT = pygame.font.SysFont('arial', 24*RATIO)
 
         if pygame.mouse.get_pressed(3)[0]:
             x, y = pygame.mouse.get_pos()
@@ -509,55 +529,55 @@ def main():
 
         pygame.draw.line(surf, GREY1, (0, SCREEN_HEIGHT*0.148), (SCREEN_WIDTH, SCREEN_HEIGHT*0.148))
 
-        play_rect = pygame.Rect((40, 20, 100, 50))
+        play_rect = pygame.Rect((40*RATIO, 20*RATIO, 100*RATIO, 50*RATIO))
         pygame.draw.rect(surf, GREY0, play_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if play_rect.collidepoint(pos) else GREY2, play_rect)
         text = SETTINGS_FONT.render("pause" if playing else "play", False, BLACK)
         r = text.get_rect()
-        r.center = (0, 45)
-        r.left = 48
+        r.center = (0, 45*RATIO)
+        r.left = 48*RATIO
         surf.blit(text, r)
 
-        step_rect = pygame.Rect((40, 80, 100, 30))
+        step_rect = pygame.Rect((40*RATIO, 80*RATIO, 100*RATIO, 30*RATIO))
         pygame.draw.rect(surf, GREY0, step_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if step_rect.collidepoint(pos) else GREY2, step_rect)
         text = SETTINGS_FONT.render("play step", False, BLACK)
         r = text.get_rect()
-        r.center = (0, 95)
-        r.left = 48
+        r.center = (0*RATIO, 95*RATIO)
+        r.left = 48*RATIO
         surf.blit(text, r)
 
-        clear_rect = pygame.Rect((165, 20, 75, 90))
+        clear_rect = pygame.Rect((165*RATIO, 20*RATIO, 75*RATIO, 90*RATIO))
         pygame.draw.rect(surf, GREY0, clear_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if clear_rect.collidepoint(pos) else GREY2, clear_rect)
         text = SETTINGS_FONT.render("clear", False, BLACK)
         r = text.get_rect()
-        r.center = (200, 65)
+        r.center = (200*RATIO, 65*RATIO)
         surf.blit(text, r)
 
-        pygame.draw.line(surf, GREY1, (278, 0), (278, SCREEN_HEIGHT*0.148))
+        pygame.draw.line(surf, GREY1, (278*RATIO, 0*RATIO), (278*RATIO, 133*RATIO))
 
-        back_rect = pygame.Rect((315, 20, 100, 40))
+        back_rect = pygame.Rect((315*RATIO, 20*RATIO, 100*RATIO, 40*RATIO))
         pygame.draw.rect(surf, GREY0, back_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if back_rect.collidepoint(pos) else GREY2, back_rect)
         text = SETTINGS_FONT.render("back", False, BLACK)
         r = text.get_rect()
         r.center = back_rect.center
-        r.left = 325
+        r.left = 325*RATIO
         surf.blit(text, r)
 
-        for_rect = pygame.Rect((315, 70, 100, 40))
+        for_rect = pygame.Rect((315*RATIO, 70*RATIO, 100*RATIO, 40*RATIO))
         pygame.draw.rect(surf, GREY0, for_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if for_rect.collidepoint(*pos) else GREY2, for_rect)
         text = SETTINGS_FONT.render("forward", False, BLACK)
         r = text.get_rect()
         r.center = for_rect.center
-        r.left = 325
+        r.left = 325*RATIO
         surf.blit(text, r)
 
-        pygame.draw.line(surf, GREY1, (453, 0), (453, SCREEN_HEIGHT*0.148))
+        pygame.draw.line(surf, GREY1, (453*RATIO, 0*RATIO), (453*RATIO, 133*RATIO))
 
-        slow_rect = pygame.Rect((491, 20, 100, 40))
+        slow_rect = pygame.Rect((491*RATIO, 20*RATIO, 100*RATIO, 40*RATIO))
         pygame.draw.rect(surf, GREY0, slow_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if slow_rect.collidepoint(pos) else GREY2, slow_rect)
         text = SETTINGS_FONT.render("- speed", False, BLACK)
@@ -565,7 +585,7 @@ def main():
         r.center = slow_rect.center
         surf.blit(text, r)
 
-        speed_rect = pygame.Rect((491, 70, 100, 40))
+        speed_rect = pygame.Rect((491*RATIO, 70*RATIO, 100*RATIO, 40*RATIO))
         pygame.draw.rect(surf, GREY0, speed_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if speed_rect.collidepoint(pos) else GREY2, speed_rect)
         text = SETTINGS_FONT.render("+ speed", False, BLACK)
@@ -573,48 +593,48 @@ def main():
         r.center = speed_rect.center
         surf.blit(text, r)
 
-        pygame.draw.line(surf, GREY1, (629, 0), (629, SCREEN_HEIGHT*0.148))
+        pygame.draw.line(surf, GREY1, (629*RATIO, 0*RATIO), (629*RATIO, 133*RATIO))
 
-        size_rect = pygame.Rect((667, 20, 100, 90))
+        size_rect = pygame.Rect((667*RATIO, 20*RATIO, 100*RATIO, 90*RATIO))
         pygame.draw.rect(surf, GREY0, size_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if size_rect.collidepoint(pos) else GREY2, size_rect)
         text = SETTINGS_FONT.render("change", False, BLACK)
         r = text.get_rect()
-        r.center = (717, 55)
+        r.center = (717*RATIO, 55*RATIO)
         surf.blit(text, r)
         text = SETTINGS_FONT.render("board size", False, BLACK)
         r = text.get_rect()
-        r.center = (717, 75)
+        r.center = (717*RATIO, 75*RATIO)
         surf.blit(text, r)
 
-        pygame.draw.line(surf, GREY1, (805, 0), (805, SCREEN_HEIGHT*0.148))
+        pygame.draw.line(surf, GREY1, (805*RATIO, 0*RATIO), (805*RATIO, 133*RATIO))
 
-        pygame.draw.line(surf, GREY1, (1187, 0), (1225-38, SCREEN_HEIGHT*0.148))
+        pygame.draw.line(surf, GREY1, (1187*RATIO, 0*RATIO), (1187*RATIO, 133*RATIO))
 
-        save_as_rect = pygame.Rect((1225, 20, 75, 90))
+        save_as_rect = pygame.Rect((1225*RATIO, 20*RATIO, 75*RATIO, 90*RATIO))
         pygame.draw.rect(surf, GREY0, save_as_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if save_as_rect.collidepoint(*pos) else GREY2, save_as_rect)
         text = SETTINGS_FONT.render("save as", False, BLACK)
         r = text.get_rect()
-        r.center = (1225+38, 65)
+        r.center = (1263*RATIO, 65*RATIO)
         surf.blit(text, r)
 
-        load_rect = pygame.Rect((1325, 20, 75, 90))
+        load_rect = pygame.Rect((1325*RATIO, 20*RATIO, 75*RATIO, 90*RATIO))
         pygame.draw.rect(surf, GREY0, load_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if load_rect.collidepoint(*pos) else GREY2, load_rect)
         text = SETTINGS_FONT.render("load", False, BLACK)
         r = text.get_rect()
-        r.center = (1325+38, 65)
+        r.center = (1363*RATIO, 65*RATIO)
         surf.blit(text, r)
 
-        pygame.draw.line(surf, GREY1, (1438, 0), (1438, SCREEN_HEIGHT * 0.148))
+        pygame.draw.line(surf, GREY1, (1438*RATIO, 0), (1438*RATIO, SCREEN_HEIGHT * 0.148))
 
-        quit_rect = pygame.Rect((1475, 20, 75, 90))
+        quit_rect = pygame.Rect((1475*RATIO, 20*RATIO, 75*RATIO, 90*RATIO))
         pygame.draw.rect(surf, GREY0, quit_rect, 5)
         pygame.draw.rect(surf, GREY2_5 if quit_rect.collidepoint(*pos) else GREY2, quit_rect)
         text = SETTINGS_FONT.render("quit", False, BLACK)
         r = text.get_rect()
-        r.center = (1512, 65)
+        r.center = (1512*RATIO, 65*RATIO)
         surf.blit(text, r)
 
         pygame.display.update()
